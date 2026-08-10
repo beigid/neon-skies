@@ -1,45 +1,22 @@
 version: '3.8'
 
 services:
-  # 1. The PostgreSQL Database
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: flight_tracker
-    ports:
-      - "5433:5432" # Changed left side to 5433 to avoid conflict
-    volumes:
-      - pg_data:/var/lib/postgresql/data # Prevents data loss when the container stops
-
-  # 2. Metabase Dashboard
+  # 1. Metabase Dashboard
   metabase:
     image: metabase/metabase:latest
     ports:
-      - "3001:3000" # Changed left side to 3001 to avoid conflict
+      - "3001:3000"
     environment:
-      # Tell Metabase to use our local Postgres db for its internal storage
       MB_DB_TYPE: postgres
-      MB_DB_DBNAME: flight_tracker
       MB_DB_PORT: 5432
-      MB_DB_USER: admin
-      MB_DB_PASS: password123
-      MB_DB_HOST: db
-    depends_on:
-      - db # Wait for the database to start first
+      MB_DB_USER: ${NEON_USER}
+      MB_DB_PASS: ${NEON_PASSWORD}
+      MB_DB_HOST: ${NEON_HOST}
+      MB_DB_DBNAME: neondb
+      MB_DB_SSL: "true"
 
-  # 3. The Python ETL Scraper
+  # 2. Local Python Scraper Runner
   scraper:
-    build: . # Builds the Dockerfile in the current directory
+    build: .
     env_file:
       - .env
-    environment:
-      # Injects the connection string pointing to the local 'db' container
-      DATABASE_URL: postgresql://admin:password123@db:5432/flight_tracker
-    depends_on:
-      - db
-
-# Create a persistent volume for the database
-volumes:
-  pg_data:

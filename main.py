@@ -1,13 +1,10 @@
 import os
-import time
 import psycopg2
-import schedule
 import requests
 from datetime import datetime, timedelta
 
 # 1. Configuration & Credentials
-# When running inside Docker, it will use port 5432.
-DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:password123@db:5432/flight_tracker")
+DB_URL = os.getenv("DATABASE_URL")
 SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
 
 def get_db_connection():
@@ -24,7 +21,7 @@ def fetch_flight_data(origin, destination, travel_date):
     "departure_id": origin,
     "arrival_id": destination,
     "outbound_date": travel_date,
-    "type": "2", # "2" specifies a one-way ticket
+    "type": "2",  # "2" specifies a one-way ticket
     "currency": "USD",
     "hl": "en",
     "api_key": SERPAPI_API_KEY
@@ -60,7 +57,6 @@ def run_daily_extraction():
   # Example: Look for flights 30 days from today
   target_date = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
 
-  # Example Route (You can later pull this from a 'tracked_routes' table)
   origin = "SEA"       # Seattle
   destination = "LAX"  # Los Angeles
 
@@ -93,16 +89,8 @@ def run_daily_extraction():
     except Exception as e:
       print(f"Database insertion failed: {e}")
 
-# 4. The Scheduler
+# 4. Entrypoint for Cloud Run Job / Local Container Execution
 if __name__ == "__main__":
-  print("Flight Scraper Service Started.")
-
-  # Run once immediately on startup so you don't have to wait to see if it works
+  print(f"[{datetime.now()}] Flight Scraper Execution Started.")
   run_daily_extraction()
-
-  # Then schedule it to run once every 24 hours
-  schedule.every(24).hours.do(run_daily_extraction)
-
-  while True:
-    schedule.run_pending()
-    time.sleep(60) # Wake up and check the schedule once a minute
+  print(f"[{datetime.now()}] Flight Scraper Execution Finished. Exiting cleanly.")
