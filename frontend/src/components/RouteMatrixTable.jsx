@@ -1,15 +1,72 @@
 import React from 'react';
-import { Plane, TrendingDown, TrendingUp, ArrowRight } from 'lucide-react';
+import { TrendingDown, TrendingUp, ArrowRight } from 'lucide-react';
 
-const MATRIX_DATA = [
-  { route: 'SEA → LAX', name: 'Seattle to Los Angeles', min: 149, avg: 185, current: 149, trend: '-19.4%', isDrop: true, signal: 'BUY NOW' },
-  { route: 'JFK → LHR', name: 'New York to London', min: 540, avg: 652, current: 580, trend: '-11.0%', isDrop: true, signal: 'BUY NOW' },
-  { route: 'SFO → HND', name: 'San Francisco to Tokyo', min: 790, avg: 910, current: 880, trend: '+4.2%', isDrop: false, signal: 'WAIT' },
-  { route: 'BOS → MIA', name: 'Boston to Miami', min: 185, avg: 220, current: 195, trend: '-11.3%', isDrop: true, signal: 'BUY NOW' },
-  { route: 'ORD → DEN', name: 'Chicago to Denver', min: 125, avg: 155, current: 130, trend: '-16.1%', isDrop: true, signal: 'BUY NOW' },
+const MONITORED_CORRIDORS = [
+  { id: 'SEA-LAX', origin: 'SEA', dest: 'LAX', route: 'SEA → LAX', name: 'Seattle to Los Angeles', defaultMin: 149, defaultAvg: 185, defaultCurrent: 149, defaultTrend: '-19.4%', defaultIsDrop: true, defaultSignal: 'BUY NOW' },
+  { id: 'JFK-LHR', origin: 'JFK', dest: 'LHR', route: 'JFK → LHR', name: 'New York to London', defaultMin: 540, defaultAvg: 652, defaultCurrent: 580, defaultTrend: '-11.0%', defaultIsDrop: true, defaultSignal: 'BUY NOW' },
+  { id: 'SFO-HND', origin: 'SFO', dest: 'HND', route: 'SFO → HND', name: 'San Francisco to Tokyo', defaultMin: 790, defaultAvg: 910, defaultCurrent: 880, defaultTrend: '+4.2%', defaultIsDrop: false, defaultSignal: 'WAIT' },
+  { id: 'BOS-MIA', origin: 'BOS', dest: 'MIA', route: 'BOS → MIA', name: 'Boston to Miami', defaultMin: 185, defaultAvg: 220, defaultCurrent: 195, defaultTrend: '-11.3%', defaultIsDrop: true, defaultSignal: 'BUY NOW' },
+  { id: 'ORD-DEN', origin: 'ORD', dest: 'DEN', route: 'ORD → DEN', name: 'Chicago to Denver', defaultMin: 125, defaultAvg: 155, defaultCurrent: 130, defaultTrend: '-16.1%', defaultIsDrop: true, defaultSignal: 'BUY NOW' },
 ];
 
-export default function RouteMatrixTable({ onSelectRoute }) {
+export default function RouteMatrixTable({ records = [], onSelectRoute }) {
+  const rows = MONITORED_CORRIDORS.map(corridor => {
+    const routeRecords = records.filter(
+      r => r.origin === corridor.origin && r.destination === corridor.dest
+    );
+
+    if (routeRecords.length > 0) {
+      // Sort chronologically
+      const sorted = [...routeRecords].sort(
+        (a, b) => new Date(a.extracted_at) - new Date(b.extracted_at)
+      );
+      
+      const prices = sorted.map(r => r.base_price).filter(p => typeof p === 'number' && !isNaN(p));
+      const minPrice = Math.min(...prices);
+      const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+      const currentPrice = sorted[sorted.length - 1].base_price;
+      
+      // Calculate 7-day delta if enough data points exist
+      let trendStr = corridor.defaultTrend;
+      let isDrop = corridor.defaultIsDrop;
+      
+      if (sorted.length >= 2) {
+        const firstPrice = sorted[Math.max(0, sorted.length - 7)].base_price;
+        const diff = currentPrice - firstPrice;
+        const pct = ((diff / firstPrice) * 100).toFixed(1);
+        trendStr = `${pct > 0 ? '+' : ''}${pct}%`;
+        isDrop = diff <= 0;
+      }
+      
+      const signal = currentPrice <= avgPrice ? 'BUY NOW' : 'WAIT';
+
+      return {
+        id: corridor.id,
+        route: corridor.route,
+        name: corridor.name,
+        min: minPrice,
+        avg: avgPrice,
+        current: currentPrice,
+        trend: trendStr,
+        isDrop: isDrop,
+        signal: signal
+      };
+    }
+
+    // Default benchmark row
+    return {
+      id: corridor.id,
+      route: corridor.route,
+      name: corridor.name,
+      min: corridor.defaultMin,
+      avg: corridor.defaultAvg,
+      current: corridor.defaultCurrent,
+      trend: corridor.defaultTrend,
+      isDrop: corridor.defaultIsDrop,
+      signal: corridor.defaultSignal
+    };
+  });
+
   return (
     <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800/80 my-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -29,16 +86,16 @@ export default function RouteMatrixTable({ onSelectRoute }) {
             <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[11px]">
               <th className="py-2.5 px-3">Route</th>
               <th className="py-2.5 px-3">Min</th>
-              <th className="py-2.5 px-3">60D Avg</th>
+              <th className="py-2.5 px-3">Avg Floor</th>
               <th className="py-2.5 px-3">Current</th>
               <th className="py-2.5 px-3">7D Delta</th>
               <th className="py-2.5 px-3">Signal</th>
-              <th className="py-2.5 px-3 text-right">View</th>
+              <th className="py-2.5 px-3 text-right">Inspect</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
-            {MATRIX_DATA.map((row) => (
-              <tr key={row.route} className="hover:bg-slate-800/30 transition-colors">
+            {rows.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-800/30 transition-colors">
                 <td className="py-3 px-3 font-semibold text-white font-mono">
                   {row.route}
                 </td>
@@ -54,15 +111,20 @@ export default function RouteMatrixTable({ onSelectRoute }) {
                   </span>
                 </td>
                 <td className="py-3 px-3 font-bold text-xs">
-                  <span className={row.signal === 'BUY NOW' ? 'text-emerald-400' : 'text-amber-400'}>
+                  <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] ${
+                    row.signal === 'BUY NOW'
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                  }`}>
                     {row.signal}
                   </span>
                 </td>
                 <td className="py-3 px-3 text-right">
                   <button
-                    onClick={() => onSelectRoute(row.route)}
+                    onClick={() => onSelectRoute(row.id)}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-cyan-500 hover:text-sky-950 text-slate-300 transition-colors"
-                    title="Inspect Route"
+                    title={`Inspect ${row.route} time-series chart`}
+                    aria-label={`Inspect ${row.route}`}
                   >
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { neon } from '@neondatabase/serverless';
 import Header from './components/Header';
 import MetricsOverview from './components/MetricsOverview';
@@ -7,14 +7,24 @@ import RouteMatrixTable from './components/RouteMatrixTable';
 import MetabaseShowcase from './components/MetabaseShowcase';
 import Footer from './components/Footer';
 
+const ROUTE_NAMES = {
+  'SEA-LAX': 'Seattle (SEA) → Los Angeles (LAX)',
+  'JFK-LHR': 'New York (JFK) → London (LHR)',
+  'SFO-HND': 'San Francisco (SFO) → Tokyo (HND)',
+  'BOS-MIA': 'Boston (BOS) → Miami (MIA)',
+  'ORD-DEN': 'Chicago (ORD) → Denver (DEN)',
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedRoute, setSelectedRoute] = useState('SEA-LAX');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastSynced, setLastSynced] = useState(null);
+  const [isLiveDB, setIsLiveDB] = useState(false);
 
-  // Fetch flight data on page load (tries Netlify function first for security)
-  const fetchFlightData = async () => {
+  // Fetch flight data on page load (tries Netlify function first for security, then direct client Neon query)
+  const fetchFlightData = useCallback(async () => {
     setLoading(true);
 
     // 1. Try Netlify Serverless API endpoint (secure server-side DB query)
@@ -24,25 +34,38 @@ export default function App() {
         const rows = await res.json();
         if (Array.isArray(rows) && rows.length > 0) {
           console.log("Fetched flight records via Netlify Serverless API.");
-          const mapped = rows.map(r => ({
-            id: r.id,
-            extracted_at: r.extracted_at,
-            origin: "SEA",
-            destination: "LAX",
-            route_name: "Seattle (SEA) → Los Angeles (LAX)",
-            base_price: r.base_price || 0.0,
-            cabin_class: r.cabin_class || "Economy",
-            upgrade_cost: r.upgrade_cost || 0.0,
-            boarding_group: r.boarding_group || "N/A",
-            available_seats_left: r.available_seats_left
-          }));
+          const mapped = rows.map(r => {
+            const origin = r.origin || "SEA";
+            const destination = r.destination || "LAX";
+            const routeKey = `${origin}-${destination}`;
+            return {
+              id: r.id,
+              extracted_at: r.extracted_at,
+              origin: origin,
+              destination: destination,
+              route_name: ROUTE_NAMES[routeKey] || `${origin} → ${destination}`,
+              base_price: Number(r.base_price) || 0.0,
+              cabin_class: r.cabin_class || "Economy",
+              upgrade_cost: Number(r.upgrade_cost) || 0.0,
+              boarding_group: r.boarding_group || "N/A",
+              available_seats_left: r.available_seats_left
+            };
+          });
+
+          const newestTime = rows.reduce((latest, r) => {
+            const t = new Date(r.extracted_at).getTime();
+            return t > latest ? t : latest;
+          }, 0);
+
           setRecords(mapped);
+          setLastSynced(newestTime > 0 ? new Date(newestTime).toISOString() : new Date().toISOString());
+          setIsLiveDB(true);
           setLoading(false);
           return;
         }
       }
     } catch (err) {
-      console.log("Netlify function endpoint not available, falling back...", err);
+      console.log("Netlify function endpoint not available, falling back to direct query...", err);
     }
     
     // 2. Direct client query fallback (if VITE_DATABASE_URL is provided locally)
@@ -56,6 +79,8 @@ export default function App() {
           SELECT 
             id, 
             extracted_at, 
+            COALESCE(origin, 'SEA') as origin,
+            COALESCE(destination, 'LAX') as destination,
             base_price::float, 
             cabin_class, 
             upgrade_cost::float, 
@@ -66,19 +91,32 @@ export default function App() {
         `;
 
         if (rows && rows.length > 0) {
-          const mapped = rows.map(r => ({
-            id: r.id,
-            extracted_at: r.extracted_at,
-            origin: "SEA",
-            destination: "LAX",
-            route_name: "Seattle (SEA) → Los Angeles (LAX)",
-            base_price: r.base_price || 0.0,
-            cabin_class: r.cabin_class || "Economy",
-            upgrade_cost: r.upgrade_cost || 0.0,
-            boarding_group: r.boarding_group || "N/A",
-            available_seats_left: r.available_seats_left
-          }));
+          const mapped = rows.map(r => {
+            const origin = r.origin || "SEA";
+            const destination = r.destination || "LAX";
+            const routeKey = `${origin}-${destination}`;
+            return {
+              id: r.id,
+              extracted_at: r.extracted_at,
+              origin: origin,
+              destination: destination,
+              route_name: ROUTE_NAMES[routeKey] || `${origin} → ${destination}`,
+              base_price: Number(r.base_price) || 0.0,
+              cabin_class: r.cabin_class || "Economy",
+              upgrade_cost: Number(r.upgrade_cost) || 0.0,
+              boarding_group: r.boarding_group || "N/A",
+              available_seats_left: r.available_seats_left
+            };
+          });
+
+          const newestTime = rows.reduce((latest, r) => {
+            const t = new Date(r.extracted_at).getTime();
+            return t > latest ? t : latest;
+          }, 0);
+
           setRecords(mapped);
+          setLastSynced(newestTime > 0 ? new Date(newestTime).toISOString() : new Date().toISOString());
+          setIsLiveDB(true);
           setLoading(false);
           return;
         }
@@ -87,14 +125,56 @@ export default function App() {
       }
     }
 
-    // Fallback demonstration dataset
+    // 3. Static JSON export fallback (for $0 static deployment without serverless functions)
+    try {
+      const staticRes = await fetch('/data/flights.json');
+      if (staticRes.ok) {
+        const rows = await staticRes.json();
+        if (Array.isArray(rows) && rows.length > 0) {
+          const mapped = rows.map(r => {
+            const origin = r.origin || "SEA";
+            const destination = r.destination || "LAX";
+            const routeKey = `${origin}-${destination}`;
+            return {
+              id: r.id,
+              extracted_at: r.extracted_at,
+              origin: origin,
+              destination: destination,
+              route_name: ROUTE_NAMES[routeKey] || `${origin} → ${destination}`,
+              base_price: Number(r.base_price) || 0.0,
+              cabin_class: r.cabin_class || "Economy",
+              upgrade_cost: Number(r.upgrade_cost) || 0.0,
+              boarding_group: r.boarding_group || "N/A",
+              available_seats_left: r.available_seats_left
+            };
+          });
+
+          const newestTime = rows.reduce((latest, r) => {
+            const t = new Date(r.extracted_at).getTime();
+            return t > latest ? t : latest;
+          }, 0);
+
+          setRecords(mapped);
+          setLastSynced(newestTime > 0 ? new Date(newestTime).toISOString() : new Date().toISOString());
+          setIsLiveDB(true);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log("Static flights.json not present, falling back to demo generator:", e);
+    }
+
+    // 4. Fallback demonstration dataset (if DB & static files are unreachable)
     generateFallbackDataset();
+    setLastSynced(new Date().toISOString());
+    setIsLiveDB(false);
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     fetchFlightData();
-  }, []);
+  }, [fetchFlightData]);
 
   const generateFallbackDataset = () => {
     const routes = [
@@ -126,7 +206,9 @@ export default function App() {
           route_name: route.name,
           base_price: final_price,
           cabin_class: "Economy",
-          upgrade_cost: Math.round(final_price * 0.35)
+          upgrade_cost: Math.round(final_price * 0.35),
+          boarding_group: "Group 2",
+          available_seats_left: null
         });
       });
     }
@@ -137,11 +219,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-sky-950 text-slate-100 flex flex-col font-sans">
       
-      {/* Sleek Header */}
+      {/* Sleek Header with Cadence-Aware Status */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onRefresh={fetchFlightData}
+        lastSynced={lastSynced}
+        isLiveDB={isLiveDB}
       />
 
       {/* Main Content */}
@@ -158,8 +241,9 @@ export default function App() {
               setSelectedRoute={setSelectedRoute}
             />
 
-            {/* Route Matrix */}
+            {/* Route Matrix Table with live dynamic calculations */}
             <RouteMatrixTable
+              records={records}
               onSelectRoute={(routeId) => {
                 setSelectedRoute(routeId);
                 window.scrollTo({ top: 120, behavior: 'smooth' });

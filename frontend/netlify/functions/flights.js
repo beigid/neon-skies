@@ -20,6 +20,8 @@ export async function handler(event, context) {
       SELECT 
         id, 
         extracted_at, 
+        COALESCE(origin, 'SEA') as origin,
+        COALESCE(destination, 'LAX') as destination,
         base_price::float, 
         cabin_class, 
         upgrade_cost::float, 

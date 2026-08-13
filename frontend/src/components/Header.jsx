@@ -1,10 +1,65 @@
 import React from 'react';
-import { Plane, Activity, BarChart2, Zap } from 'lucide-react';
+import { Plane, Activity, BarChart2, Clock } from 'lucide-react';
 
-export default function Header({ activeTab, setActiveTab, onRefresh }) {
+function getBatchStatus(dateString) {
+  if (!dateString) return { label: "Connecting...", isHealthy: true };
+  
+  const now = new Date();
+  const date = new Date(dateString);
+  
+  // Compare calendar days
+  const isToday = now.toDateString() === date.toDateString();
+  
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = yesterday.toDateString() === date.toDateString();
+
+  if (isToday) {
+    return {
+      label: "Today's Batch",
+      isHealthy: true
+    };
+  }
+  
+  if (isYesterday) {
+    return {
+      label: "48h Cycle (Yesterday)",
+      isHealthy: true
+    };
+  }
+
+  const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return {
+    label: `48h Cycle (${formattedDate})`,
+    isHealthy: true
+  };
+}
+
+function formatExactDate(dateString) {
+  if (!dateString) return 'Pending sync';
+  const d = new Date(dateString);
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZoneName: 'short'
+  });
+}
+
+export default function Header({
+  activeTab,
+  setActiveTab,
+  lastSynced = null,
+  isLiveDB = false
+}) {
+  const batchStatus = getBatchStatus(lastSynced);
+  const exactTime = formatExactDate(lastSynced);
+
   return (
     <header className="border-b border-slate-800/80 bg-sky-950/90 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
         
         {/* Brand */}
         <div className="flex items-center gap-3">
@@ -48,10 +103,26 @@ export default function Header({ activeTab, setActiveTab, onRefresh }) {
           </button>
         </nav>
 
-        {/* Status indicator */}
-        <div className="hidden sm:flex items-center gap-2 text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Neon DB Live
+        {/* Cadence-Aware Status Pill (No ticking minute counters) */}
+        <div
+          title={`ETL Architecture: 48-Hour Batch Cadence\nLast DB Snapshot: ${exactTime}\nStatus: Pipeline Healthy`}
+          className={`flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border transition-all ${
+            isLiveDB
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.12)]'
+              : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+          }`}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isLiveDB ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+            }`}
+          />
+          <span className="font-semibold">{isLiveDB ? 'Neon DB Live' : 'Demo Dataset'}</span>
+          <span className="text-slate-500 hidden sm:inline">•</span>
+          <span className="text-[11px] text-slate-300 hidden sm:inline flex items-center gap-1">
+            <Clock className="w-3 h-3 text-slate-400 inline -mt-0.5" />
+            <span>{batchStatus.label}</span>
+          </span>
         </div>
 
       </div>

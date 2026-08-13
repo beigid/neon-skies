@@ -26,8 +26,8 @@ export default function PriceTrendChart({ records, selectedRoute, setSelectedRou
 
     let filtered = records.filter(r => {
       if (selectedRoute === 'ALL') return true;
-      const [orig] = selectedRoute.split('-');
-      return r.origin === orig;
+      const [orig, dest] = selectedRoute.split('-');
+      return r.origin === orig && (dest ? r.destination === dest : true);
     });
 
     filtered.sort((a, b) => new Date(a.extracted_at) - new Date(b.extracted_at));

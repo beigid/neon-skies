@@ -8,6 +8,8 @@ export default function DatabaseSchemaInspector({ records }) {
   const ddlQuery = `CREATE TABLE IF NOT EXISTS flight_prices (
     id SERIAL PRIMARY KEY,
     extracted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    origin VARCHAR(10) DEFAULT 'SEA',
+    destination VARCHAR(10) DEFAULT 'LAX',
     base_price NUMERIC(10, 2) NOT NULL,
     cabin_class VARCHAR(50) DEFAULT 'Economy',
     upgrade_cost NUMERIC(10, 2) DEFAULT 0.00,
@@ -15,9 +17,9 @@ export default function DatabaseSchemaInspector({ records }) {
     available_seats_left INT DEFAULT NULL
 );
 
--- Index for time-series range queries
-CREATE INDEX idx_flight_prices_extracted_at 
-ON flight_prices (extracted_at DESC);`;
+-- Composite Index for time-series corridor queries
+CREATE INDEX idx_flight_prices_route_extracted 
+ON flight_prices (origin, destination, extracted_at DESC);`;
 
   const sampleJson = JSON.stringify({
     extracted_at: "2026-08-12T22:00:00Z",
