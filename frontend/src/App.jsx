@@ -125,47 +125,7 @@ export default function App() {
       }
     }
 
-    // 3. Static JSON export fallback (for $0 static deployment without serverless functions)
-    try {
-      const staticRes = await fetch('/data/flights.json');
-      if (staticRes.ok) {
-        const rows = await staticRes.json();
-        if (Array.isArray(rows) && rows.length > 0) {
-          const mapped = rows.map(r => {
-            const origin = r.origin || "SEA";
-            const destination = r.destination || "LAX";
-            const routeKey = `${origin}-${destination}`;
-            return {
-              id: r.id,
-              extracted_at: r.extracted_at,
-              origin: origin,
-              destination: destination,
-              route_name: ROUTE_NAMES[routeKey] || `${origin} → ${destination}`,
-              base_price: Number(r.base_price) || 0.0,
-              cabin_class: r.cabin_class || "Economy",
-              upgrade_cost: Number(r.upgrade_cost) || 0.0,
-              boarding_group: r.boarding_group || "N/A",
-              available_seats_left: r.available_seats_left
-            };
-          });
-
-          const newestTime = rows.reduce((latest, r) => {
-            const t = new Date(r.extracted_at).getTime();
-            return t > latest ? t : latest;
-          }, 0);
-
-          setRecords(mapped);
-          setLastSynced(newestTime > 0 ? new Date(newestTime).toISOString() : new Date().toISOString());
-          setIsLiveDB(true);
-          setLoading(false);
-          return;
-        }
-      }
-    } catch (e) {
-      console.log("Static flights.json not present, falling back to demo generator:", e);
-    }
-
-    // 4. Fallback demonstration dataset (if DB & static files are unreachable)
+    // 3. Fallback demonstration dataset (if DB is unreachable)
     generateFallbackDataset();
     setLastSynced(new Date().toISOString());
     setIsLiveDB(false);

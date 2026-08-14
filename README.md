@@ -18,18 +18,18 @@ Built to optimize flight purchasing decisions, this project features a **fully d
 [ Neon Serverless PostgreSQL Database ]
        ┌──┴───────────────────────────────┐
        ▼                                  ▼
-[ Metabase BI (Local Docker) ]    [ export_data.py ]
+[ Metabase BI (Local Docker) ]    [ Netlify Serverless Functions / Driver ]
 (Private Internal Command Center)         │
-                                          ▼  (Static JSON Dump)
+                                          ▼  (Live Serverless SQL Queries)
                                [ Public React + Vite Frontend ]
-                               (Hosted on Vercel / Netlify - $0)
+                               (Hosted on Netlify / Vercel - $0)
 ```
 
 * **Data Extraction (ETL):** Python (`requests`, `psycopg2`), SerpApi (Google Flights API)
 * **Cloud Execution:** Docker, GCP Artifact Registry, Cloud Run Jobs, Cloud Scheduler
 * **Database:** Serverless PostgreSQL (Hosted via [Neon](https://neon.tech))
 * **Internal BI & Analytics:** Containerized [Metabase](https://www.metabase.com) (Run locally via Docker)
-* **Public Frontend:** React 18, Vite 5, Tailwind CSS, Recharts, Lucide React
+* **Public Frontend:** React 18, Vite 5, Tailwind CSS, Recharts, Lucide React, Neon Serverless Driver
 
 ---
 
@@ -52,7 +52,7 @@ For recruiters and hiring managers to interactively explore flight fare trends l
 ### Key Capabilities
 * **Interactive Time-Series Charts:** Multi-route filtering (SEA-LAX, JFK-LHR, SFO-HND, BOS-MIA, ORD-DEN), custom date ranges (7D, 14D, 30D, All), and 7-day moving average overlays powered by Recharts.
 * **Cabin Upgrade Delta Tracker:** Evaluates base economy fares vs premium upgrade margins.
-* **Automated Data Exporter (`export_data.py`):** Dumps live Neon PostgreSQL rows into `frontend/public/data/flights.json` to allow $0 hosting on Vercel or Netlify.
+* **Live Serverless Connection:** Directly connects to Neon PostgreSQL via Netlify serverless functions and client-side Neon serverless driver with fallback demo data mode.
 * **Metabase BI Showcase Modal:** Embedded screenshot gallery and SQL query inspector for internal BI proof of work.
 
 ---
@@ -70,29 +70,24 @@ Run the scraper:
 python main.py
 ```
 
-### 2. Exporting Data for the Public Frontend
-Sync your Neon PostgreSQL data into the frontend static JSON file:
-```bash
-python export_data.py
-```
-
-### 3. Running the Public Frontend Locally
+### 2. Running the Public Frontend Locally
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 4. Deploying Frontend to Vercel or Netlify ($0 Cost)
+### 3. Deploying Frontend to Netlify or Vercel ($0 Cost)
 1. Push your repository to GitHub.
-2. Import the project in Vercel or Netlify.
+2. Import the project in Netlify or Vercel.
 3. Set the **Root Directory** to `frontend`.
-4. Build command: `npm run build`, Output directory: `dist`.
-5. Deploy! Cost: **$0.00/mo**.
+4. Add environment variable: `DATABASE_URL=postgresql://...`
+5. Build command: `npm run build`, Output directory: `dist`.
+6. Deploy! Cost: **$0.00/mo**.
 
 ---
 
 ## 🛠️ Key Data Engineering Highlights
 * **Decoupled Architecture:** Compute, database, internal BI, and public presentation run independently.
 * **Fault-Tolerant ETL:** Validates API responses, manages database connection pools, and handles schema initialization dynamically.
-* **Zero-Cost Hosting Play:** Local Docker Metabase for internal analytics + static JSON export for public React frontend eliminates server bills while delivering full interactive features.
+* **Zero-Cost Hosting Play:** Local Docker Metabase for internal analytics + serverless frontend/API layer eliminates fixed server bills while delivering full interactive features.
